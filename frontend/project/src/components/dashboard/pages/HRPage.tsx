@@ -15,14 +15,18 @@ import {
   UserCheck,
   Loader2,
   Download,
+  Pencil,
+  Trash2,
+  LogIn,
+  LogOut,
 } from 'lucide-react';
 import { GlassCard, Badge, GlassButton } from '../../ui';
 import { api, ApiError, downloadFile } from '../../../lib/api';
 
 /* ─── API types ──────────────────────────────────────────────────────────── */
 
-type Employee = { id: number; user: number; username: string; full_name: string; position: string; hire_date: string; base_salary: string; is_active: boolean; ip_address: string | null };
-type Attendance = { id: number; employee: number; employee_name: string; date: string; status: string; hours_worked: number };
+type Employee = { id: number; user: number; username: string; full_name: string; position: string; hire_date: string; base_salary: string; is_active: boolean; ip_address: string | null; last_login_at: string | null };
+type Attendance = { id: number; employee: number; employee_name: string; date: string; check_in: string | null; check_out: string | null; status: string; hours_worked: number };
 type Payslip = { id: number; employee: number; employee_name: string; period_start: string; period_end: string; base_salary: string; overtime_amount: string; bonus: string; deductions: string; net_salary: string; generated_at: string };
 type Leave = { id: number; employee: number; employee_name: string; leave_type: string; start_date: string; end_date: string; reason: string; status: string };
 
@@ -34,7 +38,7 @@ function unwrap<T>(res: { results?: T[] } | T[]): T[] {
 }
 
 export function HRPage() {
-  const [activeTab, setActiveTab] = useState<'employees' | 'payroll' | 'leave'>('employees');
+  const [activeTab, setActiveTab] = useState<'employees' | 'attendance' | 'payroll' | 'leave'>('employees');
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [loading, setLoading] = useState(true);
@@ -45,6 +49,7 @@ export function HRPage() {
   const [leaveRequests, setLeaveRequests] = useState<Leave[]>([]);
 
   const [showAddEmployee, setShowAddEmployee] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [showGeneratePayslip, setShowGeneratePayslip] = useState(false);
   const [showNewLeave, setShowNewLeave] = useState(false);
 
@@ -133,6 +138,48 @@ export function HRPage() {
     load();
   }
 
+  async function deleteEmployee(employee: Employee) {
+    if (!window.confirm(`Remove ${employee.full_name || employee.username} from HR? Their attendance, leave and payslip history go with them (their login account itself is untouched).`)) return;
+    try {
+      await api.delete(`/hr/employees/${employee.id}/`);
+      load();
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Failed to delete employee.');
+    }
+  }
+
+  const todayByEmployee = useMemo(() => {
+    const map = new Map<number, Attendance>();
+    for (const a of todayAttendance) map.set(a.employee, a);
+    return map;
+  }, [todayAttendance]);
+
+  async function checkIn(employeeId: number) {
+    try {
+      await api.post('/hr/attendance/', { employee: employeeId, date: today, status: 'present', check_in: new Date().toISOString() });
+      load();
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Failed to check in.');
+    }
+  }
+  async function checkOut(record: Attendance) {
+    try {
+      await api.patch(`/hr/attendance/${record.id}/`, { check_out: new Date().toISOString() });
+      load();
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Failed to check out.');
+    }
+  }
+  async function markStatus(employeeId: number, status: string, existing?: Attendance) {
+    try {
+      if (existing) await api.patch(`/hr/attendance/${existing.id}/`, { status });
+      else await api.post('/hr/attendance/', { employee: employeeId, date: today, status });
+      load();
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Failed to update attendance.');
+    }
+  }
+
   if (loading) {
     return <div className="grid h-96 place-items-center"><Loader2 className="h-8 w-8 animate-spin text-brand-500" /></div>;
   }
@@ -159,7 +206,7 @@ export function HRPage() {
         <GlassCard className="p-5 lg:col-span-2">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex gap-1 rounded-2xl bg-white/40 p-1">
-              {(['employees', 'payroll', 'leave'] as const).map((tab) => (
+              {(['employees', 'attendance', 'payroll', 'leave'] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -169,22 +216,27 @@ export function HRPage() {
                 </button>
               ))}
             </div>
-            <GlassButton
-              variant="primary"
-              size="sm"
-              onClick={() => {
-                if (activeTab === 'employees') setShowAddEmployee((v) => !v);
-                else if (activeTab === 'payroll') setShowGeneratePayslip((v) => !v);
-                else setShowNewLeave((v) => !v);
-              }}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              {activeTab === 'employees' ? 'Add employee' : activeTab === 'payroll' ? 'Generate payslip' : 'New request'}
-            </GlassButton>
+            {activeTab !== 'attendance' && (
+              <GlassButton
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  if (activeTab === 'employees') setShowAddEmployee((v) => !v);
+                  else if (activeTab === 'payroll') setShowGeneratePayslip((v) => !v);
+                  else setShowNewLeave((v) => !v);
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                {activeTab === 'employees' ? 'Add employee' : activeTab === 'payroll' ? 'Generate payslip' : 'New request'}
+              </GlassButton>
+            )}
           </div>
 
           {activeTab === 'employees' && showAddEmployee && (
             <AddEmployeeForm onSaved={() => { setShowAddEmployee(false); load(); }} onCancel={() => setShowAddEmployee(false)} />
+          )}
+          {activeTab === 'employees' && editingEmployee && (
+            <EditEmployeeForm employee={editingEmployee} onSaved={() => { setEditingEmployee(null); load(); }} onCancel={() => setEditingEmployee(null)} />
           )}
           {activeTab === 'payroll' && showGeneratePayslip && (
             <GeneratePayslipForm employees={employees} onSaved={() => { setShowGeneratePayslip(false); load(); }} onCancel={() => setShowGeneratePayslip(false)} />
@@ -203,6 +255,7 @@ export function HRPage() {
                     <th className="pb-3 font-semibold">Status</th>
                     <SortTh label="Salary" field="salary" active={sortField} dir={sortDir} onToggle={toggleSort} />
                     <SortTh label="Attendance" field="attendance" active={sortField} dir={sortDir} onToggle={toggleSort} />
+                    <th className="pb-3"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/40">
@@ -216,7 +269,9 @@ export function HRPage() {
                           <div>
                             <div className="font-semibold text-ink-900">{e.full_name || e.username}</div>
                             <div className="text-[11px] text-ink-400">{e.position}</div>
-                            <div className="font-mono text-[10px] text-ink-300">{e.ip_address ?? 'No active session'}</div>
+                            <div className="font-mono text-[10px] text-ink-300" title="Last known login IP">
+                              {e.ip_address ?? 'Never logged in'}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -226,9 +281,73 @@ export function HRPage() {
                       <td className="py-3 text-right">
                         <AttendanceBar pct={attendancePctByEmployee.get(e.id) ?? null} />
                       </td>
+                      <td className="py-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => setEditingEmployee(e)}
+                            title="Edit"
+                            className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-white/60 hover:text-ink-700"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => deleteEmployee(e)}
+                            title="Delete"
+                            className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-rose-50 hover:text-rose-600"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
-                  {sorted.length === 0 && <tr><td colSpan={5} className="py-6 text-center text-sm text-ink-400">No employees yet.</td></tr>}
+                  {sorted.length === 0 && <tr><td colSpan={6} className="py-6 text-center text-sm text-ink-400">No employees yet.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {activeTab === 'attendance' && (
+            <div className="mt-5 overflow-x-auto">
+              <p className="mb-3 text-xs text-ink-500">{today} · check employees in/out, or mark a status directly</p>
+              <table className="w-full min-w-[640px] text-left text-sm">
+                <thead>
+                  <tr className="text-xs uppercase tracking-wider text-ink-400">
+                    <th className="pb-3 font-semibold">Employee</th>
+                    <th className="pb-3 font-semibold">Status</th>
+                    <th className="pb-3 font-semibold">Check-in</th>
+                    <th className="pb-3 font-semibold">Check-out</th>
+                    <th className="pb-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/40">
+                  {employees.map((e) => {
+                    const record = todayByEmployee.get(e.id);
+                    return (
+                      <tr key={e.id} className="transition-colors hover:bg-white/30">
+                        <td className="py-3 font-semibold text-ink-900">{e.full_name || e.username}</td>
+                        <td className="py-3">{record ? <AttendanceStatusPill status={record.status} /> : <span className="text-xs text-ink-400">Not marked</span>}</td>
+                        <td className="py-3 text-ink-600">{record?.check_in ? new Date(record.check_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                        <td className="py-3 text-ink-600">{record?.check_out ? new Date(record.check_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                        <td className="py-3 text-right">
+                          <div className="flex justify-end gap-1.5">
+                            {!record && (
+                              <>
+                                <GlassButton variant="glass" size="sm" onClick={() => checkIn(e.id)}><LogIn className="h-3.5 w-3.5" /> Check in</GlassButton>
+                                <button onClick={() => markStatus(e.id, 'absent')} className="rounded-full border border-white/50 bg-white/40 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50">Absent</button>
+                                <button onClick={() => markStatus(e.id, 'on_leave')} className="rounded-full border border-white/50 bg-white/40 px-3 py-1.5 text-xs font-semibold text-amber-600 hover:bg-amber-50">On leave</button>
+                              </>
+                            )}
+                            {record && record.status === 'present' && !record.check_out && (
+                              <GlassButton variant="glass" size="sm" onClick={() => checkOut(record)}><LogOut className="h-3.5 w-3.5" /> Check out</GlassButton>
+                            )}
+                            {record && record.check_out && <span className="text-xs text-ink-400">Completed · {record.hours_worked}h</span>}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {employees.length === 0 && <tr><td colSpan={5} className="py-6 text-center text-sm text-ink-400">No employees yet.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -463,6 +582,46 @@ function AddEmployeeForm({ onSaved, onCancel }: { onSaved: () => void; onCancel:
   );
 }
 
+function EditEmployeeForm({ employee, onSaved, onCancel }: { employee: Employee; onSaved: () => void; onCancel: () => void }) {
+  const [position, setPosition] = useState(employee.position);
+  const [hireDate, setHireDate] = useState(employee.hire_date);
+  const [salary, setSalary] = useState(employee.base_salary);
+  const [isActive, setIsActive] = useState(employee.is_active);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await api.patch(`/hr/employees/${employee.id}/`, { position, hire_date: hireDate, base_salary: salary, is_active: isActive });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update employee.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-4 grid gap-3 rounded-2xl border border-white/50 bg-white/40 p-4 sm:grid-cols-6">
+      <div className="flex items-center rounded-xl border border-white/60 bg-white/50 px-3 py-2 text-sm text-ink-500 sm:col-span-2">{employee.full_name || employee.username}</div>
+      <input required placeholder="Position" value={position} onChange={(e) => setPosition(e.target.value)} className="rounded-xl border border-white/60 bg-white/70 px-3 py-2 text-sm sm:col-span-2" />
+      <input required type="date" value={hireDate} onChange={(e) => setHireDate(e.target.value)} className="rounded-xl border border-white/60 bg-white/70 px-3 py-2 text-sm sm:col-span-2" />
+      <input required type="number" step="0.001" placeholder="Base salary (OMR)" value={salary} onChange={(e) => setSalary(e.target.value)} className="rounded-xl border border-white/60 bg-white/70 px-3 py-2 text-sm sm:col-span-3" />
+      <label className="flex items-center gap-2 rounded-xl border border-white/60 bg-white/70 px-3 py-2 text-sm text-ink-700 sm:col-span-3">
+        <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} /> Active
+      </label>
+      {error && <p className="sm:col-span-6 text-sm text-rose-600">{error}</p>}
+      <div className="flex gap-2 sm:col-span-6">
+        <GlassButton type="submit" variant="primary" size="sm" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</GlassButton>
+        <GlassButton type="button" variant="ghost" size="sm" onClick={onCancel}>Cancel</GlassButton>
+      </div>
+    </form>
+  );
+}
+
 function GeneratePayslipForm({ employees, onSaved, onCancel }: { employees: Employee[]; onSaved: () => void; onCancel: () => void }) {
   const [employee, setEmployee] = useState(employees[0]?.id ?? 0);
   const [periodStart, setPeriodStart] = useState(new Date(new Date().setDate(1)).toISOString().slice(0, 10));
@@ -579,6 +738,17 @@ function LeaveStatusPill({ status }: { status: string }) {
     rejected: 'bg-rose-100/70 text-rose-600 border-rose-200/60',
   };
   return <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold capitalize ${map[status] ?? map.pending}`}>{status}</span>;
+}
+
+function AttendanceStatusPill({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    present: 'bg-brand-100/70 text-brand-700 border-brand-200/60',
+    late: 'bg-amber-100/70 text-amber-700 border-amber-200/60',
+    absent: 'bg-rose-100/70 text-rose-600 border-rose-200/60',
+    on_leave: 'bg-amber-100/70 text-amber-700 border-amber-200/60',
+  };
+  const label = status === 'on_leave' ? 'On leave' : status.charAt(0).toUpperCase() + status.slice(1);
+  return <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${map[status] ?? map.present}`}>{label}</span>;
 }
 
 function AttendanceBar({ pct }: { pct: number | null }) {

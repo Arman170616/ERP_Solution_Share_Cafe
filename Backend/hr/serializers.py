@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from accounts.models import ActivityLog
+
 from .models import Attendance, Employee, Leave, Shift
 
 
@@ -7,6 +9,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
     full_name = serializers.CharField(source="user.get_full_name", read_only=True)
     ip_address = serializers.SerializerMethodField()
+    last_login_at = serializers.SerializerMethodField()
 
     class Meta:
         model = Employee
@@ -20,13 +23,27 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "base_salary",
             "is_active",
             "ip_address",
+            "last_login_at",
         ]
 
+    def _last_login(self, obj):
+        return (
+            ActivityLog.objects.filter(user=obj.user, action=ActivityLog.Action.LOGIN)
+            .order_by("-created_at")
+            .first()
+        )
+
     def get_ip_address(self, obj):
-        """Last known login IP for this employee's account — visible to Admin only via
-        this endpoint's permission, matching the SRS's IP-based access control theme."""
-        session = getattr(obj.user, "active_session", None)
-        return session.ip_address if session else None
+        """IP from the employee's most recent login — read from the permanent ActivityLog,
+        not the ActiveSession (which is deleted on logout, so it'd go blank the moment
+        someone signs out). Visible to Admin only via this endpoint's permission, matching
+        the SRS's IP-based access control theme."""
+        log = self._last_login(obj)
+        return log.ip_address if log else None
+
+    def get_last_login_at(self, obj):
+        log = self._last_login(obj)
+        return log.created_at if log else None
 
 
 class AttendanceSerializer(serializers.ModelSerializer):
