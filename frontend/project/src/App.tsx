@@ -85,7 +85,7 @@ function App() {
         </RequireRole>
       )}
       {active === 'hr' && (
-        <RequireRole roles={['admin']}>
+        <RequireRole roles={['admin', 'manager']}>
           <HRPage />
         </RequireRole>
       )}

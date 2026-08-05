@@ -8,7 +8,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .models import ActiveSession, ActivityLog, IPAccessRule, User
-from .permissions import IsAdmin, IsManagerOrAdmin
+from .permissions import CanManageUserAccounts, IsAdmin, IsManagerOrAdmin
 from .serializers import (
     ActivityLogSerializer,
     CustomTokenObtainPairSerializer,
@@ -147,7 +147,7 @@ class MeView(APIView):
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by("username")
     serializer_class = UserSerializer
-    permission_classes = [IsAdmin]
+    permission_classes = [CanManageUserAccounts]
 
 
 class StaffListView(APIView):

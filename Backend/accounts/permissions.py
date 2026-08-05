@@ -33,6 +33,23 @@ class CanCancelOrder(BasePermission):
         return bool(user and user.is_authenticated and user.role != User.Role.MANAGER)
 
 
+class CanManageUserAccounts(BasePermission):
+    """Admin has full access to UserViewSet. Manager may only *create* new Staff-role
+    accounts — needed for the HR page's "Add employee" onboarding flow — and cannot
+    list/view/edit/delete accounts or create Manager/Admin accounts (no privilege
+    escalation, no browsing other people's account details)."""
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if user.role == User.Role.ADMIN:
+            return True
+        if user.role == User.Role.MANAGER and view.action == "create":
+            return request.data.get("role") == User.Role.STAFF
+        return False
+
+
 class ReadWriteRolePermission(BasePermission):
     """Role gate driven by `read_roles` / `write_roles` tuples set on the view.
 

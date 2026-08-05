@@ -2,7 +2,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from accounts.permissions import IsAdmin
+from accounts.permissions import IsManagerOrAdmin
 
 from .models import Attendance, Employee, Leave, Shift
 from .serializers import AttendanceSerializer, EmployeeSerializer, LeaveSerializer, ShiftSerializer
@@ -11,27 +11,27 @@ from .serializers import AttendanceSerializer, EmployeeSerializer, LeaveSerializ
 class EmployeeViewSet(viewsets.ModelViewSet):
     queryset = Employee.objects.select_related("user", "user__active_session").all()
     serializer_class = EmployeeSerializer
-    permission_classes = [IsAdmin]
+    permission_classes = [IsManagerOrAdmin]
 
 
 class AttendanceViewSet(viewsets.ModelViewSet):
     queryset = Attendance.objects.select_related("employee__user").all()
     serializer_class = AttendanceSerializer
-    permission_classes = [IsAdmin]
+    permission_classes = [IsManagerOrAdmin]
     filterset_fields = ["employee", "date", "status"]
 
 
 class ShiftViewSet(viewsets.ModelViewSet):
     queryset = Shift.objects.select_related("employee__user").all()
     serializer_class = ShiftSerializer
-    permission_classes = [IsAdmin]
+    permission_classes = [IsManagerOrAdmin]
     filterset_fields = ["employee", "date"]
 
 
 class LeaveViewSet(viewsets.ModelViewSet):
     queryset = Leave.objects.select_related("employee__user").all()
     serializer_class = LeaveSerializer
-    permission_classes = [IsAdmin]
+    permission_classes = [IsManagerOrAdmin]
     filterset_fields = ["employee", "status", "leave_type"]
 
     @action(detail=True, methods=["post"])

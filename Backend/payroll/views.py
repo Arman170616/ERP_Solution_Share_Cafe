@@ -3,7 +3,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from accounts.permissions import IsAdmin
+from accounts.permissions import IsManagerOrAdmin
 
 from .models import Payslip
 from .serializers import GeneratePayslipSerializer, PayslipSerializer
@@ -13,7 +13,7 @@ from .services import calculate_payslip
 class PayslipViewSet(viewsets.ModelViewSet):
     queryset = Payslip.objects.select_related("employee__user").all()
     serializer_class = PayslipSerializer
-    permission_classes = [IsAdmin]
+    permission_classes = [IsManagerOrAdmin]
     filterset_fields = ["employee"]
     http_method_names = ["get", "post", "delete", "head", "options"]
 
