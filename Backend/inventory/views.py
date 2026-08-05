@@ -4,6 +4,7 @@ from rest_framework.response import Response
 
 from accounts.models import User
 from accounts.permissions import ReadWriteRolePermission
+from notifications.models import Notification
 
 from .models import Category, Ingredient, Product, ProductIngredient, StockMovement
 from .serializers import (
@@ -69,6 +70,20 @@ class IngredientViewSet(viewsets.ModelViewSet):
         horizon = timezone.now().date() + timedelta(days=int(request.query_params.get("days", 7)))
         qs = self.get_queryset().filter(expiry_date__isnull=False, expiry_date__lte=horizon)
         return Response(IngredientSerializer(qs, many=True).data)
+
+    def perform_destroy(self, instance):
+        name = instance.name
+        deleter = self.request.user
+        instance.delete()
+        # Manager can delete ingredients (INVENTORY_WRITE_ROLES), but Admin wants to know
+        # about it — one Notification per active Admin, not a broadcast to other Managers.
+        if deleter.role == User.Role.MANAGER:
+            for admin in User.objects.filter(role=User.Role.ADMIN, is_active=True):
+                Notification.objects.create(
+                    recipient=admin,
+                    notif_type=Notification.NotifType.SYSTEM,
+                    message=f"{deleter.username} (Manager) deleted ingredient “{name}”",
+                )
 
 
 class StockMovementViewSet(viewsets.ModelViewSet):

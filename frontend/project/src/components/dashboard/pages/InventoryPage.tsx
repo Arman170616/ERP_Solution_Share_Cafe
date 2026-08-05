@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react';
 import {
   Search,
   Plus,
+  Pencil,
+  Trash2,
   AlertTriangle,
   Package,
   TrendingDown,
@@ -37,6 +39,7 @@ export function InventoryPage() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'low' | 'out'>('all');
   const [showAdd, setShowAdd] = useState(false);
+  const [editingIngredient, setEditingIngredient] = useState<Ingredient | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -79,6 +82,16 @@ export function InventoryPage() {
       load();
     } catch (err) {
       alert(err instanceof ApiError ? err.message : 'Failed to record stock movement.');
+    }
+  }
+
+  async function deleteIngredient(ingredient: Ingredient) {
+    if (!window.confirm(`Delete "${ingredient.name}"? This can't be undone.`)) return;
+    try {
+      await api.delete(`/inventory/ingredients/${ingredient.id}/`);
+      load();
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Failed to delete ingredient.');
     }
   }
 
@@ -146,7 +159,14 @@ export function InventoryPage() {
           </div>
         </div>
 
-        {showAdd && <AddIngredientForm onSaved={() => { setShowAdd(false); load(); }} onCancel={() => setShowAdd(false)} />}
+        {showAdd && <IngredientForm onSaved={() => { setShowAdd(false); load(); }} onCancel={() => setShowAdd(false)} />}
+        {editingIngredient && (
+          <IngredientForm
+            ingredient={editingIngredient}
+            onSaved={() => { setEditingIngredient(null); load(); }}
+            onCancel={() => setEditingIngredient(null)}
+          />
+        )}
 
         {error && <p className="mt-4 text-sm text-rose-600">{error}</p>}
 
@@ -183,7 +203,23 @@ export function InventoryPage() {
                       <td className="py-3 text-right font-medium text-ink-900">OMR {Number(i.cost_per_unit).toFixed(3)}</td>
                       <td className="py-3"><StockStatus status={status} /></td>
                       <td className="py-3 text-right">
-                        <GlassButton variant="glass" size="sm" onClick={() => restock(i)}>Restock</GlassButton>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <GlassButton variant="glass" size="sm" onClick={() => restock(i)}>Restock</GlassButton>
+                          <button
+                            onClick={() => setEditingIngredient(i)}
+                            title="Edit"
+                            className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-white/60 hover:text-ink-700"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => deleteIngredient(i)}
+                            title="Delete"
+                            className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-rose-50 hover:text-rose-600"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -200,11 +236,19 @@ export function InventoryPage() {
   );
 }
 
-function AddIngredientForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: () => void }) {
-  const [name, setName] = useState('');
-  const [unit, setUnit] = useState('kg');
-  const [reorder, setReorder] = useState('0');
-  const [cost, setCost] = useState('0');
+function IngredientForm({
+  ingredient,
+  onSaved,
+  onCancel,
+}: {
+  ingredient?: Ingredient;
+  onSaved: () => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(ingredient?.name ?? '');
+  const [unit, setUnit] = useState(ingredient?.unit ?? 'kg');
+  const [reorder, setReorder] = useState(ingredient?.reorder_threshold ?? '0');
+  const [cost, setCost] = useState(ingredient?.cost_per_unit ?? '0');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -212,16 +256,13 @@ function AddIngredientForm({ onSaved, onCancel }: { onSaved: () => void; onCance
     e.preventDefault();
     setSaving(true);
     setError(null);
+    const body = { name, unit, reorder_threshold: reorder, cost_per_unit: cost };
     try {
-      await api.post('/inventory/ingredients/', {
-        name,
-        unit,
-        reorder_threshold: reorder,
-        cost_per_unit: cost,
-      });
+      if (ingredient) await api.patch(`/inventory/ingredients/${ingredient.id}/`, body);
+      else await api.post('/inventory/ingredients/', body);
       onSaved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create ingredient.');
+      setError(err instanceof Error ? err.message : 'Failed to save ingredient.');
     } finally {
       setSaving(false);
     }
@@ -235,7 +276,7 @@ function AddIngredientForm({ onSaved, onCancel }: { onSaved: () => void; onCance
       <input required type="number" step="0.001" placeholder="Cost per unit" value={cost} onChange={(e) => setCost(e.target.value)} className="rounded-xl border border-white/60 bg-white/70 px-3 py-2 text-sm" />
       {error && <p className="sm:col-span-5 text-sm text-rose-600">{error}</p>}
       <div className="flex gap-2 sm:col-span-5">
-        <GlassButton type="submit" variant="primary" size="sm" disabled={saving}>{saving ? 'Saving…' : 'Save'}</GlassButton>
+        <GlassButton type="submit" variant="primary" size="sm" disabled={saving}>{saving ? 'Saving…' : ingredient ? 'Save changes' : 'Save'}</GlassButton>
         <GlassButton type="button" variant="ghost" size="sm" onClick={onCancel}>Cancel</GlassButton>
       </div>
     </form>

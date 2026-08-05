@@ -1,5 +1,6 @@
 import { Menu, LogOut } from 'lucide-react';
 import type { User } from '../../contexts/AuthContext';
+import { NotificationBell } from './NotificationBell';
 
 function initials(user: User) {
   const source = [user.first_name, user.last_name].filter(Boolean).join(' ') || user.username;
@@ -40,25 +41,29 @@ export function Topbar({
           <p className="text-xs text-ink-500">{subtitle}</p>
         </div>
 
-        {/* Avatar */}
-        <div className="ml-auto flex items-center gap-2 rounded-full border border-white/50 bg-white/40 py-1 pl-1 pr-2">
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-accent-400 to-accent-700 text-xs font-bold text-white">
-            {user ? initials(user) : '?'}
-          </span>
-          <span className="hidden text-left sm:block">
-            <span className="block text-xs font-semibold leading-tight text-ink-900">
-              {user ? user.first_name || user.username : 'Guest'}
+        <div className="ml-auto flex items-center gap-2">
+          {user && <NotificationBell />}
+
+          {/* Avatar */}
+          <div className="flex items-center gap-2 rounded-full border border-white/50 bg-white/40 py-1 pl-1 pr-2">
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-accent-400 to-accent-700 text-xs font-bold text-white">
+              {user ? initials(user) : '?'}
             </span>
-            <span className="block text-[10px] capitalize text-ink-500">{user?.role ?? ''}</span>
-          </span>
+            <span className="hidden text-left sm:block">
+              <span className="block text-xs font-semibold leading-tight text-ink-900">
+                {user ? user.first_name || user.username : 'Guest'}
+              </span>
+              <span className="block text-[10px] capitalize text-ink-500">{user?.role ?? ''}</span>
+            </span>
+          </div>
+          <button
+            onClick={onSignOut}
+            title="Sign out"
+            className="grid h-9 w-9 place-items-center rounded-full border border-white/50 bg-white/40 text-ink-600 hover:bg-white/60"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
-        <button
-          onClick={onSignOut}
-          title="Sign out"
-          className="grid h-9 w-9 place-items-center rounded-full border border-white/50 bg-white/40 text-ink-600 hover:bg-white/60"
-        >
-          <LogOut className="h-4 w-4" />
-        </button>
       </div>
     </header>
   );
