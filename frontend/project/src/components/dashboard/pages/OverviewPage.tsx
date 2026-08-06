@@ -21,6 +21,7 @@ import {
 import { GlassCard, Badge, GlassButton } from '../../ui';
 import { api, ApiError } from '../../../lib/api';
 import { useAuth } from '../../../contexts/AuthContext';
+import { OrderReceiptModal } from '../OrderReceiptModal';
 
 type Overview = {
   date: string;
@@ -68,6 +69,7 @@ export function OverviewPage({ onViewReports }: { onViewReports: () => void }) {
   const [peakHours, setPeakHours] = useState<PeakHour[]>([]);
   const [monthSales, setMonthSales] = useState<SalesBucket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [receiptOrderId, setReceiptOrderId] = useState<number | null>(null);
 
   useEffect(() => {
     const eightWeeksAgo = new Date();
@@ -329,7 +331,12 @@ export function OverviewPage({ onViewReports }: { onViewReports: () => void }) {
             </thead>
             <tbody className="divide-y divide-white/40">
               {recentOrders.map((o) => (
-                <tr key={o.id} className="transition-colors hover:bg-white/30">
+                <tr
+                  key={o.id}
+                  onClick={() => setReceiptOrderId(o.id)}
+                  title="View payment receipt"
+                  className="cursor-pointer transition-colors hover:bg-white/50"
+                >
                   <td className="py-3 font-semibold text-ink-900">#{o.id}{o.table_number ? ` · ${o.table_number}` : ''}</td>
                   <td className="py-3 text-ink-700">{ORDER_TYPE_LABEL[o.order_type] ?? o.order_type}</td>
                   <td className="py-3 font-medium text-ink-900">OMR {Number(o.total).toFixed(2)}</td>
@@ -344,6 +351,10 @@ export function OverviewPage({ onViewReports }: { onViewReports: () => void }) {
           </table>
         </div>
       </GlassCard>
+
+      {receiptOrderId != null && (
+        <OrderReceiptModal orderId={receiptOrderId} onClose={() => setReceiptOrderId(null)} />
+      )}
     </div>
   );
 }
