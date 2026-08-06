@@ -4,15 +4,21 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from accounts.permissions import CanCancelOrder
+from accounts.permissions import CanCancelOrder, IsManagerOrAdmin
 
 from .models import Order, Payment
 from .serializers import OrderCreateSerializer, OrderSerializer, PaymentSerializer
 
 
 class OrderViewSet(viewsets.ModelViewSet):
+    """Staff no longer has a Sales & POS module of their own — orders are rung up on the
+    shared terminal by Admin/Manager, who attribute the sale to a staff member via the
+    "Taken by" picker (which sets `served_by`), so a Staff account never needs to touch
+    this endpoint directly. Cancel/destroy keep their existing separate rule below."""
+
     queryset = Order.objects.all().prefetch_related("items", "payments")
     filterset_fields = ["status", "order_type", "customer"]
+    permission_classes = [IsManagerOrAdmin]
 
     def get_serializer_class(self):
         if self.action == "create":

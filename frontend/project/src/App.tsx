@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Settings, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { LandingPage } from './components/landing/LandingPage';
 import { DashboardLayout } from './components/dashboard/DashboardLayout';
 import { type NavKey } from './components/dashboard/Sidebar';
@@ -10,7 +10,6 @@ import { AccountingPage } from './components/dashboard/pages/AccountingPage';
 import { HRPage } from './components/dashboard/pages/HRPage';
 import { StaffHRPage } from './components/dashboard/pages/StaffHRPage';
 import { ReportsPage } from './components/dashboard/pages/ReportsPage';
-import { PlaceholderPage } from './components/dashboard/pages/PlaceholderPage';
 import { AuthPage } from './pages/auth/AuthPage';
 import { RequireRole } from './components/RequireRole';
 import { useAuth } from './contexts/AuthContext';
@@ -24,18 +23,6 @@ const meta: Record<NavKey, { title: string; subtitle: string }> = {
   accounting: { title: 'Accounting', subtitle: 'Revenue, expenses and financial summary' },
   hr: { title: 'HR & Payroll', subtitle: 'Employees, attendance and payroll' },
   reports: { title: 'Reports', subtitle: 'Financial and operational reports' },
-  settings: { title: 'Settings', subtitle: 'Workspace, roles and integrations' },
-};
-
-// Settings/user management is covered by the Django admin already, not duplicated here.
-const placeholderContent: Partial<
-  Record<NavKey, { description: string; icon: typeof Settings; features: string[] }>
-> = {
-  settings: {
-    description: 'User accounts, roles, IP whitelist and system activity logs are managed in the Django admin panel for now.',
-    icon: Settings,
-    features: ['Users & roles (Django admin)', 'IP whitelist/blacklist (Django admin)', 'Activity logs (Django admin)'],
-  },
 };
 
 function App() {
@@ -45,9 +32,9 @@ function App() {
 
   useEffect(() => {
     if (!loading && user && view !== 'app') setView('app');
-    // Staff has no Dashboard access on the backend — land them on POS, the module
-    // they're actually scoped to, instead of a 403'd page. Admin/Manager can land here.
-    if (user && user.role === 'staff' && active === 'dashboard') setActive('pos');
+    // Staff's only module is HR & Payroll (self-service) — Dashboard and Sales & POS
+    // aren't in their sidebar, so land them there instead of a 403'd page.
+    if (user && user.role === 'staff' && (active === 'dashboard' || active === 'pos')) setActive('hr');
   }, [loading, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
@@ -74,7 +61,11 @@ function App() {
           <OverviewPage onViewReports={() => setActive('reports')} />
         </RequireRole>
       )}
-      {active === 'pos' && <POSPage />}
+      {active === 'pos' && (
+        <RequireRole roles={['admin', 'manager']}>
+          <POSPage />
+        </RequireRole>
+      )}
       {active === 'inventory' && (
         <RequireRole roles={['admin', 'manager']}>
           <InventoryPage />
@@ -98,14 +89,6 @@ function App() {
         <RequireRole roles={['admin']}>
           <ReportsPage />
         </RequireRole>
-      )}
-      {placeholderContent[active] && (
-        <PlaceholderPage
-          title={m.title}
-          description={placeholderContent[active]!.description}
-          icon={placeholderContent[active]!.icon}
-          features={placeholderContent[active]!.features}
-        />
       )}
     </DashboardLayout>
   );

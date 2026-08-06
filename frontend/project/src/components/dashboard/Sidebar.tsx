@@ -5,7 +5,6 @@ import {
   Boxes,
   Briefcase,
   FileBarChart,
-  Settings,
   LifeBuoy,
   X,
   LogOut,
@@ -19,8 +18,7 @@ export type NavKey =
   | 'pos'
   | 'inventory'
   | 'hr'
-  | 'reports'
-  | 'settings';
+  | 'reports';
 
 type NavItem = {
   key: NavKey;
@@ -41,7 +39,7 @@ const groups: { title: string; items: NavItem[] }[] = [
   {
     title: 'Operations',
     items: [
-      { key: 'pos', label: 'Sales & POS', icon: ShoppingCart, badge: 'Live' },
+      { key: 'pos', label: 'Sales & POS', icon: ShoppingCart, badge: 'Live', roles: ['admin', 'manager'] },
       { key: 'inventory', label: 'Inventory', icon: Boxes, roles: ['admin', 'manager'] },
     ],
   },
@@ -161,19 +159,6 @@ export function Sidebar({
 
           {/* Bottom */}
           <div className="mt-2 space-y-1 border-t border-white/40 pt-3">
-            {role === 'admin' && (
-              <button
-                onClick={() => onNavigate('settings')}
-                className={[
-                  'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
-                  active === 'settings'
-                    ? 'bg-gradient-to-r from-brand-500 to-brand-700 text-white shadow-glow'
-                    : 'text-ink-600 hover:bg-white/60 hover:text-ink-900',
-                ].join(' ')}
-              >
-                <Settings className="h-4.5 w-4.5" /> Settings
-              </button>
-            )}
             <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-ink-600 transition-colors hover:bg-white/60 hover:text-ink-900">
               <LifeBuoy className="h-4.5 w-4.5" /> Help & support
             </button>
