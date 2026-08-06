@@ -35,6 +35,11 @@ class PayslipViewSet(viewsets.ModelViewSet):
         input_serializer.is_valid(raise_exception=True)
         data = input_serializer.validated_data
 
+        # Manager can only ever generate a payslip for a Staff-role employee — never a
+        # fellow Manager's or an Admin's — mirroring the same boundary on Employee create/edit.
+        if request.user.role == User.Role.MANAGER and data["employee"].user.role != User.Role.STAFF:
+            raise PermissionDenied("Managers can only generate payslips for Staff-role employees.")
+
         calc = calculate_payslip(
             data["employee"], data["period_start"], data["period_end"], data["bonus"], data["deductions"]
         )
@@ -48,8 +53,11 @@ class PayslipViewSet(viewsets.ModelViewSet):
         return Response(PayslipSerializer(payslip).data, status=status.HTTP_201_CREATED)
 
     def perform_destroy(self, instance):
-        if self.request.user.role == User.Role.STAFF:
+        user = self.request.user
+        if user.role == User.Role.STAFF:
             raise PermissionDenied("Only Manager/Admin can delete payslips.")
+        if user.role == User.Role.MANAGER and instance.employee.user.role != User.Role.STAFF:
+            raise PermissionDenied("Managers can only delete payslips for Staff-role employees.")
         instance.delete()
 
     @action(detail=True, methods=["get"])

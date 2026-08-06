@@ -11,7 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import User
-from accounts.permissions import IsAdmin, IsStaffOrAbove
+from accounts.permissions import IsManagerOrAdmin, IsStaffOrAbove, ReadWriteRolePermission
 from crm.models import Customer, Feedback
 from inventory.models import Ingredient
 from pos.models import Order, OrderItem, Payment
@@ -36,9 +36,14 @@ def parse_date_range(request, default_days=30):
 
 
 class ExpenseViewSet(viewsets.ModelViewSet):
+    """Manager gets read-only visibility into the Accounting page's expenses ledger
+    (viewing/oversight); only Admin can add, edit or delete an expense."""
+
     queryset = Expense.objects.all()
     serializer_class = ExpenseSerializer
-    permission_classes = [IsAdmin]
+    permission_classes = [ReadWriteRolePermission]
+    read_roles = (User.Role.ADMIN, User.Role.MANAGER)
+    write_roles = (User.Role.ADMIN,)
     filterset_fields = ["category", "date"]
 
     def perform_create(self, serializer):
@@ -48,7 +53,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
 class SalesReportView(APIView):
     """SRS 4: Sales Reports (daily/weekly/monthly/yearly)."""
 
-    permission_classes = [IsAdmin]
+    permission_classes = [IsManagerOrAdmin]
 
     def get(self, request):
         period = request.query_params.get("period", "daily")
@@ -69,7 +74,7 @@ class SalesReportView(APIView):
 class BestSellersView(APIView):
     """SRS 4: Performance Trends - best-selling items."""
 
-    permission_classes = [IsAdmin]
+    permission_classes = [IsManagerOrAdmin]
 
     def get(self, request):
         start, end = parse_date_range(request)
@@ -96,7 +101,7 @@ class BestSellersView(APIView):
 class PeakHoursView(APIView):
     """SRS 4: Performance Trends - peak hours."""
 
-    permission_classes = [IsAdmin]
+    permission_classes = [IsManagerOrAdmin]
 
     def get(self, request):
         start, end = parse_date_range(request)
@@ -114,7 +119,7 @@ class PeakHoursView(APIView):
 class CustomerTrafficView(APIView):
     """SRS 4: Performance Trends - customer traffic (orders per period as a foot-traffic proxy)."""
 
-    permission_classes = [IsAdmin]
+    permission_classes = [IsManagerOrAdmin]
 
     def get(self, request):
         period = request.query_params.get("period", "daily")
@@ -135,7 +140,7 @@ class CustomerTrafficView(APIView):
 class RevenueProfitView(APIView):
     """SRS 4: Revenue & Profit - gross revenue, net profit, expense analysis."""
 
-    permission_classes = [IsAdmin]
+    permission_classes = [IsManagerOrAdmin]
 
     def get(self, request):
         start, end = parse_date_range(request)
@@ -232,7 +237,7 @@ class OverviewView(APIView):
     breakdown, since this system models a single location.
     """
 
-    permission_classes = [IsAdmin]
+    permission_classes = [IsManagerOrAdmin]
 
     def get(self, request):
         today = timezone.localdate()
@@ -275,7 +280,7 @@ class CashflowView(APIView):
     balance-sheet cash figure, just what came in through each payment method.
     """
 
-    permission_classes = [IsAdmin]
+    permission_classes = [IsManagerOrAdmin]
 
     def get(self, request):
         start, end = parse_date_range(request)

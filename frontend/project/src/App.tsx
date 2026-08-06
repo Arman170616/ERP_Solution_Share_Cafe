@@ -45,9 +45,9 @@ function App() {
 
   useEffect(() => {
     if (!loading && user && view !== 'app') setView('app');
-    // Only Admin has Dashboard access on the backend — land Manager/Staff on POS, the
-    // module they're actually scoped to, instead of a 403'd page.
-    if (user && user.role !== 'admin' && active === 'dashboard') setActive('pos');
+    // Staff has no Dashboard access on the backend — land them on POS, the module
+    // they're actually scoped to, instead of a 403'd page. Admin/Manager can land here.
+    if (user && user.role === 'staff' && active === 'dashboard') setActive('pos');
   }, [loading, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
@@ -70,7 +70,7 @@ function App() {
   return (
     <DashboardLayout active={active} onNavigate={setActive} title={m.title} subtitle={m.subtitle}>
       {active === 'dashboard' && (
-        <RequireRole roles={['admin']}>
+        <RequireRole roles={['admin', 'manager']}>
           <OverviewPage onViewReports={() => setActive('reports')} />
         </RequireRole>
       )}
@@ -81,7 +81,7 @@ function App() {
         </RequireRole>
       )}
       {active === 'accounting' && (
-        <RequireRole roles={['admin']}>
+        <RequireRole roles={['admin', 'manager']}>
           <AccountingPage />
         </RequireRole>
       )}

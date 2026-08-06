@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Wallet, TrendingUp, TrendingDown, Landmark, Scale, FileText, Plus, Trash2, Loader2 } from 'lucide-react';
 import { GlassCard, Badge, GlassButton } from '../../ui';
 import { api } from '../../../lib/api';
+import { useAuth } from '../../../contexts/AuthContext';
 
 type RevenueProfit = { gross_revenue: string; expenses: string; net_profit: string };
 type CashflowRow = { method: string; total: string; count: number };
@@ -13,6 +14,10 @@ function unwrap<T>(res: { results?: T[] } | T[]): T[] {
 }
 
 export function AccountingPage() {
+  const { user } = useAuth();
+  // Manager gets read-only visibility into Accounting for oversight; only Admin can
+  // add/delete expenses, matching the backend's ReadWriteRolePermission on ExpenseViewSet.
+  const canEdit = user?.role === 'admin';
   const [rp, setRp] = useState<RevenueProfit | null>(null);
   const [cashflow, setCashflow] = useState<CashflowRow[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -84,12 +89,14 @@ export function AccountingPage() {
               <h3 className="font-display text-base font-bold text-ink-900">Expenses</h3>
               <p className="text-xs text-ink-500">Feeds "Net Profit" above · SRS expense analysis</p>
             </div>
-            <GlassButton variant="primary" size="sm" onClick={() => setShowAddExpense((v) => !v)}>
-              <Plus className="h-3.5 w-3.5" /> Add expense
-            </GlassButton>
+            {canEdit && (
+              <GlassButton variant="primary" size="sm" onClick={() => setShowAddExpense((v) => !v)}>
+                <Plus className="h-3.5 w-3.5" /> Add expense
+              </GlassButton>
+            )}
           </div>
 
-          {showAddExpense && <AddExpenseForm onSaved={() => { setShowAddExpense(false); load(); }} onCancel={() => setShowAddExpense(false)} />}
+          {canEdit && showAddExpense && <AddExpenseForm onSaved={() => { setShowAddExpense(false); load(); }} onCancel={() => setShowAddExpense(false)} />}
 
           <div className="mt-5 overflow-x-auto">
             <table className="w-full min-w-[560px] text-left text-sm">
@@ -99,7 +106,7 @@ export function AccountingPage() {
                   <th className="pb-3 font-semibold">Category</th>
                   <th className="pb-3 font-semibold">Note</th>
                   <th className="pb-3 text-right font-semibold">Amount</th>
-                  <th className="pb-3"></th>
+                  {canEdit && <th className="pb-3"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/40">
@@ -109,14 +116,16 @@ export function AccountingPage() {
                     <td className="py-3"><TypePill category={e.category} /></td>
                     <td className="py-3 text-ink-600">{e.note || '—'}</td>
                     <td className="py-3 text-right font-semibold text-ink-900">OMR {Number(e.amount).toFixed(3)}</td>
-                    <td className="py-3 text-right">
-                      <button onClick={() => deleteExpense(e.id)} className="grid h-7 w-7 place-items-center rounded-lg text-ink-400 hover:bg-rose-50 hover:text-rose-600">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </td>
+                    {canEdit && (
+                      <td className="py-3 text-right">
+                        <button onClick={() => deleteExpense(e.id)} className="grid h-7 w-7 place-items-center rounded-lg text-ink-400 hover:bg-rose-50 hover:text-rose-600">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
-                {expenses.length === 0 && <tr><td colSpan={5} className="py-6 text-center text-sm text-ink-400">No expenses recorded yet.</td></tr>}
+                {expenses.length === 0 && <tr><td colSpan={canEdit ? 5 : 4} className="py-6 text-center text-sm text-ink-400">No expenses recorded yet.</td></tr>}
               </tbody>
             </table>
           </div>

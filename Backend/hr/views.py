@@ -1,6 +1,7 @@
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import SAFE_METHODS
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -27,9 +28,28 @@ class MyEmployeeView(APIView):
 
 
 class EmployeeViewSet(viewsets.ModelViewSet):
+    """Manager can see everyone in HR but can only ever create/edit/remove a Staff-role
+    employee's record — never another Manager's or an Admin's — mirroring the same
+    "onboard Staff only" boundary CanManageUserAccounts already enforces on user accounts.
+    Admin has no such restriction."""
+
     queryset = Employee.objects.select_related("user", "user__active_session").all()
     serializer_class = EmployeeSerializer
     permission_classes = [IsManagerOrAdmin]
+
+    def get_object(self):
+        obj = super().get_object()
+        user = self.request.user
+        if user.role == User.Role.MANAGER and self.request.method not in SAFE_METHODS and obj.user.role != User.Role.STAFF:
+            raise PermissionDenied("Managers can only edit or remove Staff-role employees.")
+        return obj
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        target = serializer.validated_data.get("user")
+        if user.role == User.Role.MANAGER and target and target.role != User.Role.STAFF:
+            raise PermissionDenied("Managers can only add Staff-role employees.")
+        serializer.save()
 
     def perform_destroy(self, instance):
         # Deactivating (not deleting) their login means: they instantly drop off the POS

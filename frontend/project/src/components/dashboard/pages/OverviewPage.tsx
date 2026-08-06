@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { GlassCard, Badge, GlassButton } from '../../ui';
 import { api, ApiError } from '../../../lib/api';
+import { useAuth } from '../../../contexts/AuthContext';
 
 type Overview = {
   date: string;
@@ -55,6 +56,10 @@ function relativeTime(iso: string) {
 }
 
 export function OverviewPage({ onViewReports }: { onViewReports: () => void }) {
+  const { user } = useAuth();
+  // Manager's Dashboard is read-only oversight — the "Reorder" quick action is a write,
+  // so it stays Admin-only here even though Manager can restock from the Inventory page.
+  const canEdit = user?.role === 'admin';
   const [overview, setOverview] = useState<Overview | null>(null);
   const [weeklySales, setWeeklySales] = useState<SalesBucket[]>([]);
   const [lowStock, setLowStock] = useState<Ingredient[]>([]);
@@ -251,9 +256,11 @@ export function OverviewPage({ onViewReports }: { onViewReports: () => void }) {
                     </div>
                   </div>
                 </div>
-                <button onClick={() => restock(s)} className="rounded-full bg-brand-500 px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-brand-600">
-                  Reorder
-                </button>
+                {canEdit && (
+                  <button onClick={() => restock(s)} className="rounded-full bg-brand-500 px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-brand-600">
+                    Reorder
+                  </button>
+                )}
               </div>
             ))}
             {lowStock.length === 0 && <p className="text-sm text-ink-400">All stocked up.</p>}

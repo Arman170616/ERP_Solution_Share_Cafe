@@ -36,7 +36,7 @@ type NavItem = {
 const groups: { title: string; items: NavItem[] }[] = [
   {
     title: 'Overview',
-    items: [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin'] }],
+    items: [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'manager'] }],
   },
   {
     title: 'Operations',
@@ -48,7 +48,7 @@ const groups: { title: string; items: NavItem[] }[] = [
   {
     title: 'Finance',
     items: [
-      { key: 'accounting', label: 'Accounting', icon: Calculator, roles: ['admin'] },
+      { key: 'accounting', label: 'Accounting', icon: Calculator, roles: ['admin', 'manager'] },
       { key: 'reports', label: 'Reports', icon: FileBarChart, roles: ['admin'] },
     ],
   },
