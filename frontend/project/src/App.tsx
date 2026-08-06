@@ -8,6 +8,7 @@ import { POSPage } from './components/dashboard/pages/POSPage';
 import { InventoryPage } from './components/dashboard/pages/InventoryPage';
 import { AccountingPage } from './components/dashboard/pages/AccountingPage';
 import { HRPage } from './components/dashboard/pages/HRPage';
+import { StaffHRPage } from './components/dashboard/pages/StaffHRPage';
 import { ReportsPage } from './components/dashboard/pages/ReportsPage';
 import { PlaceholderPage } from './components/dashboard/pages/PlaceholderPage';
 import { AuthPage } from './pages/auth/AuthPage';
@@ -70,7 +71,7 @@ function App() {
     <DashboardLayout active={active} onNavigate={setActive} title={m.title} subtitle={m.subtitle}>
       {active === 'dashboard' && (
         <RequireRole roles={['admin']}>
-          <OverviewPage />
+          <OverviewPage onViewReports={() => setActive('reports')} />
         </RequireRole>
       )}
       {active === 'pos' && <POSPage />}
@@ -85,9 +86,13 @@ function App() {
         </RequireRole>
       )}
       {active === 'hr' && (
-        <RequireRole roles={['admin', 'manager']}>
-          <HRPage />
-        </RequireRole>
+        user?.role === 'staff' ? (
+          <StaffHRPage />
+        ) : (
+          <RequireRole roles={['admin', 'manager']}>
+            <HRPage />
+          </RequireRole>
+        )
       )}
       {active === 'reports' && (
         <RequireRole roles={['admin']}>

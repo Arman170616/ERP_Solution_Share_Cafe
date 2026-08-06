@@ -11,7 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import User
-from accounts.permissions import IsAdmin
+from accounts.permissions import IsAdmin, IsStaffOrAbove
 from crm.models import Customer, Feedback
 from inventory.models import Ingredient
 from pos.models import Order, OrderItem, Payment
@@ -181,24 +181,26 @@ class EmployeePerformanceView(APIView):
     Grouped by `served_by` (who actually took the order, not just who was logged in) and
     scoped to Manager/Staff — the Admin account isn't an employee and shouldn't clutter
     this leaderboard even if it was used to ring up a test order.
+
+    Admin/Manager see the full leaderboard; a Staff account only ever gets its own row
+    back (its personal performance card on the self-service HR page), never anyone else's.
     """
 
-    permission_classes = [IsAdmin]
+    permission_classes = [IsStaffOrAbove]
 
     def get(self, request):
         start, end = parse_date_range(request)
-        orders = (
-            Order.objects.exclude(status=Order.Status.CANCELLED)
-            .filter(
-                created_at__date__gte=start,
-                created_at__date__lte=end,
-                served_by__isnull=False,
-                served_by__role__in=[User.Role.MANAGER, User.Role.STAFF],
-            )
-            .values("served_by")
-            .annotate(orders_served=Count("id"), revenue_generated=Sum("total"))
-            .order_by("-revenue_generated")
+        orders = Order.objects.exclude(status=Order.Status.CANCELLED).filter(
+            created_at__date__gte=start,
+            created_at__date__lte=end,
+            served_by__isnull=False,
+            served_by__role__in=[User.Role.MANAGER, User.Role.STAFF],
         )
+        if request.user.role == User.Role.STAFF:
+            orders = orders.filter(served_by=request.user)
+        orders = orders.values("served_by").annotate(
+            orders_served=Count("id"), revenue_generated=Sum("total")
+        ).order_by("-revenue_generated")
 
         results = []
         for row in orders:

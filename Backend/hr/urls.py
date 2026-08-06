@@ -1,6 +1,7 @@
+from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from .views import AttendanceViewSet, EmployeeViewSet, LeaveViewSet, ShiftViewSet
+from .views import AttendanceViewSet, EmployeeViewSet, LeaveViewSet, MyEmployeeView, ShiftViewSet
 
 router = DefaultRouter()
 router.register("employees", EmployeeViewSet)
@@ -8,4 +9,4 @@ router.register("attendance", AttendanceViewSet)
 router.register("shifts", ShiftViewSet)
 router.register("leave", LeaveViewSet)
 
-urlpatterns = router.urls
+urlpatterns = [path("my-employee/", MyEmployeeView.as_view(), name="hr-my-employee")] + router.urls

@@ -54,7 +54,7 @@ const groups: { title: string; items: NavItem[] }[] = [
   },
   {
     title: 'People',
-    items: [{ key: 'hr', label: 'HR & Payroll', icon: Briefcase, roles: ['admin', 'manager'] }],
+    items: [{ key: 'hr', label: 'HR & Payroll', icon: Briefcase, roles: ['admin', 'manager', 'staff'] }],
   },
 ];
 

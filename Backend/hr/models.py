@@ -20,11 +20,27 @@ class Attendance(models.Model):
         LATE = "late", "Late"
         ON_LEAVE = "on_leave", "On leave"
 
+    class ApprovalStatus(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="attendance_records")
     date = models.DateField()
     check_in = models.DateTimeField(null=True, blank=True)
     check_out = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PRESENT)
+    # Self-service workflow: a Staff account marking its own attendance lands as
+    # "pending" until a Manager/Admin approves it — only approved records count toward
+    # the HR dashboard's stats. A Manager/Admin marking on an employee's behalf (e.g. the
+    # employee couldn't self-check-in) is auto-approved, since they're already the approver.
+    approval_status = models.CharField(max_length=10, choices=ApprovalStatus.choices, default=ApprovalStatus.APPROVED)
+    marked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="attendance_marked"
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="attendance_approved"
+    )
 
     class Meta:
         unique_together = ("employee", "date")

@@ -13,8 +13,12 @@ import {
   DollarSign,
   Activity,
   Loader2,
+  FileBarChart,
+  ArrowRight,
+  Flame,
+  Clock3,
 } from 'lucide-react';
-import { GlassCard, Badge } from '../../ui';
+import { GlassCard, Badge, GlassButton } from '../../ui';
 import { api, ApiError } from '../../../lib/api';
 
 type Overview = {
@@ -27,9 +31,11 @@ type Overview = {
   order_type_breakdown: { order_type: string; revenue: string; order_count: number }[];
 };
 
-type SalesBucket = { period: string; revenue: string; order_count: number };
+type SalesBucket = { period: string; revenue: string; order_count: number; tax_collected: string };
 type Ingredient = { id: number; name: string; unit: string; quantity_on_hand: string; reorder_threshold: string };
 type Order = { id: number; order_type: string; table_number: string; status: string; total: string; created_at: string };
+type BestSeller = { product__id: number; product__name: string; quantity_sold: number; revenue: number };
+type PeakHour = { hour: number; order_count: number; revenue: string };
 
 const ORDER_TYPE_LABEL: Record<string, string> = {
   dine_in: 'Dine-in',
@@ -48,16 +54,22 @@ function relativeTime(iso: string) {
   return `${Math.round(hours / 24)}d ago`;
 }
 
-export function OverviewPage() {
+export function OverviewPage({ onViewReports }: { onViewReports: () => void }) {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [weeklySales, setWeeklySales] = useState<SalesBucket[]>([]);
   const [lowStock, setLowStock] = useState<Ingredient[]>([]);
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
+  const [bestSellers, setBestSellers] = useState<BestSeller[]>([]);
+  const [peakHours, setPeakHours] = useState<PeakHour[]>([]);
+  const [monthSales, setMonthSales] = useState<SalesBucket[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const eightWeeksAgo = new Date();
     eightWeeksAgo.setDate(eightWeeksAgo.getDate() - 56);
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    const monthStartStr = monthStart.toISOString().slice(0, 10);
 
     Promise.all([
       api.get<Overview>('/analytics/overview/'),
@@ -67,13 +79,19 @@ export function OverviewPage() {
       }),
       api.get<Ingredient[]>('/inventory/ingredients/low_stock/'),
       api.get<{ results?: Order[] } | Order[]>('/pos/orders/'),
+      api.get<BestSeller[]>('/analytics/best-sellers/', { limit: 3, start: monthStartStr }),
+      api.get<PeakHour[]>('/analytics/peak-hours/', { start: monthStartStr }),
+      api.get<{ results: SalesBucket[] }>('/analytics/sales/', { period: 'monthly', start: monthStartStr }),
     ])
-      .then(([ov, sales, low, orders]) => {
+      .then(([ov, sales, low, orders, best, peak, month]) => {
         setOverview(ov);
         setWeeklySales(sales.results);
         setLowStock(low.slice(0, 4));
         const list = Array.isArray(orders) ? orders : orders.results ?? [];
         setRecentOrders(list.slice(0, 5));
+        setBestSellers(best);
+        setPeakHours(peak);
+        setMonthSales(month.results);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -105,6 +123,8 @@ export function OverviewPage() {
   ];
 
   const totalTypeRevenue = overview.order_type_breakdown.reduce((s, b) => s + Number(b.revenue), 0) || 1;
+  const topPeakHour = [...peakHours].sort((a, b) => b.order_count - a.order_count)[0] ?? null;
+  const vatThisMonth = monthSales.reduce((s, b) => s + Number(b.tax_collected), 0);
 
   return (
     <div className="space-y-5">
@@ -240,6 +260,48 @@ export function OverviewPage() {
           </div>
         </GlassCard>
       </div>
+
+      {/* Reports summary */}
+      <GlassCard className="p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-display text-base font-bold text-ink-900">Reports summary</h3>
+            <p className="text-xs text-ink-500">This month, at a glance</p>
+          </div>
+          <GlassButton variant="glass" size="sm" onClick={onViewReports}>
+            <FileBarChart className="h-3.5 w-3.5" /> View full Reports <ArrowRight className="h-3.5 w-3.5" />
+          </GlassButton>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-white/40 bg-white/30 p-4">
+            <div className="flex items-center gap-2 text-xs font-semibold text-ink-500"><Flame className="h-3.5 w-3.5 text-amber-500" /> Best seller</div>
+            {bestSellers.length > 0 ? (
+              <>
+                <div className="mt-2 font-display text-base font-bold text-ink-900">{bestSellers[0].product__name}</div>
+                <div className="text-xs text-ink-500">{bestSellers[0].quantity_sold} sold</div>
+              </>
+            ) : (
+              <div className="mt-2 text-sm text-ink-400">No sales yet</div>
+            )}
+          </div>
+          <div className="rounded-2xl border border-white/40 bg-white/30 p-4">
+            <div className="flex items-center gap-2 text-xs font-semibold text-ink-500"><Clock3 className="h-3.5 w-3.5 text-brand-600" /> Peak hour</div>
+            {topPeakHour ? (
+              <>
+                <div className="mt-2 font-display text-base font-bold text-ink-900">{String(topPeakHour.hour).padStart(2, '0')}:00</div>
+                <div className="text-xs text-ink-500">{topPeakHour.order_count} orders</div>
+              </>
+            ) : (
+              <div className="mt-2 text-sm text-ink-400">No sales yet</div>
+            )}
+          </div>
+          <div className="rounded-2xl border border-white/40 bg-white/30 p-4">
+            <div className="flex items-center gap-2 text-xs font-semibold text-ink-500"><Receipt className="h-3.5 w-3.5 text-accent-600" /> VAT collected</div>
+            <div className="mt-2 font-display text-base font-bold text-ink-900">OMR {vatThisMonth.toFixed(2)}</div>
+            <div className="text-xs text-ink-500">month to date</div>
+          </div>
+        </div>
+      </GlassCard>
 
       {/* Recent orders */}
       <GlassCard className="p-5">

@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   Users,
-  Clock,
   DollarSign,
-  TrendingUp,
   Plus,
-  ArrowRight,
   CheckCircle,
   XCircle,
   AlertCircle,
@@ -17,16 +14,14 @@ import {
   Download,
   Pencil,
   Trash2,
-  LogIn,
-  LogOut,
 } from 'lucide-react';
-import { GlassCard, Badge, GlassButton } from '../../ui';
+import { GlassCard, GlassButton } from '../../ui';
 import { api, ApiError, downloadFile } from '../../../lib/api';
 
 /* ─── API types ──────────────────────────────────────────────────────────── */
 
 type Employee = { id: number; user: number; username: string; full_name: string; position: string; hire_date: string; base_salary: string; is_active: boolean; ip_address: string | null; last_login_at: string | null };
-type Attendance = { id: number; employee: number; employee_name: string; date: string; check_in: string | null; check_out: string | null; status: string; hours_worked: number };
+type Attendance = { id: number; employee: number; employee_name: string; date: string; check_in: string | null; check_out: string | null; status: string; hours_worked: number; approval_status: 'pending' | 'approved' | 'rejected'; marked_by: number | null; marked_by_name: string | null; approved_by: number | null; approved_by_name: string | null };
 type Payslip = { id: number; employee: number; employee_name: string; period_start: string; period_end: string; base_salary: string; overtime_amount: string; bonus: string; deductions: string; net_salary: string; generated_at: string };
 type Leave = { id: number; employee: number; employee_name: string; leave_type: string; start_date: string; end_date: string; reason: string; status: string };
 
@@ -77,10 +72,13 @@ export function HRPage() {
     else { setSortField(f); setSortDir('asc'); }
   }
 
+  // Only approval_status === 'approved' records count toward attendance stats — a Staff
+  // self-check-in sits as "pending" until a Manager/Admin accepts it, so it shouldn't
+  // inflate the numbers before that happens.
   const attendancePctByEmployee = useMemo(() => {
     const map = new Map<number, number>();
     for (const emp of employees) {
-      const records = attendance.filter((a) => a.employee === emp.id);
+      const records = attendance.filter((a) => a.employee === emp.id && a.approval_status === 'approved');
       if (records.length === 0) continue;
       const present = records.filter((a) => a.status === 'present').length;
       map.set(emp.id, Math.round((present / records.length) * 100));
@@ -97,10 +95,12 @@ export function HRPage() {
 
   const today = new Date().toISOString().slice(0, 10);
   const todayAttendance = attendance.filter((a) => a.date === today);
-  const presentToday = todayAttendance.filter((a) => a.status === 'present').length;
-  const absentToday = todayAttendance.filter((a) => a.status === 'absent').length;
-  const onLeaveToday = todayAttendance.filter((a) => a.status === 'on_leave').length;
-  const attendanceRate = todayAttendance.length ? Math.round((presentToday / todayAttendance.length) * 100) : null;
+  const pendingCount = attendance.filter((a) => a.approval_status === 'pending').length;
+  const approvedToday = todayAttendance.filter((a) => a.approval_status === 'approved');
+  const presentToday = approvedToday.filter((a) => a.status === 'present').length;
+  const absentToday = approvedToday.filter((a) => a.status === 'absent').length;
+  const onLeaveToday = approvedToday.filter((a) => a.status === 'on_leave').length;
+  const attendanceRate = approvedToday.length ? Math.round((presentToday / approvedToday.length) * 100) : null;
 
   const thisMonth = new Date().toISOString().slice(0, 7);
   const monthPayslips = payslips.filter((p) => p.period_start.slice(0, 7) === thisMonth || p.period_end.slice(0, 7) === thisMonth);
@@ -122,13 +122,6 @@ export function HRPage() {
     { label: 'Open Leaves', value: String(openLeaves), icon: Calendar, sub: 'pending approval' },
   ];
 
-  const positionBreakdown = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const e of employees) counts.set(e.position || 'Unassigned', (counts.get(e.position || 'Unassigned') ?? 0) + 1);
-    const total = employees.length || 1;
-    return [...counts.entries()].map(([position, count]) => ({ position, count, pct: (count / total) * 100 })).sort((a, b) => b.count - a.count);
-  }, [employees]);
-
   async function approveLeave(id: number) {
     await api.post(`/hr/leave/${id}/approve/`);
     load();
@@ -139,7 +132,7 @@ export function HRPage() {
   }
 
   async function deleteEmployee(employee: Employee) {
-    if (!window.confirm(`Remove ${employee.full_name || employee.username} from HR? Their attendance, leave and payslip history go with them (their login account itself is untouched).`)) return;
+    if (!window.confirm(`Remove ${employee.full_name || employee.username} from HR? Their attendance, leave and payslip history go with them, and their login is deactivated (so they also disappear from the POS "Taken by" list). This can be undone in the Django admin if needed.`)) return;
     try {
       await api.delete(`/hr/employees/${employee.id}/`);
       load();
@@ -154,29 +147,23 @@ export function HRPage() {
     return map;
   }, [todayAttendance]);
 
-  async function checkIn(employeeId: number) {
+  // Attendance is now self-service (Staff check themselves in/out from their own HR page)
+  // — Admin/Manager no longer mark it on someone's behalf here, they only accept/decline
+  // what staff submitted.
+  async function approveAttendance(id: number) {
     try {
-      await api.post('/hr/attendance/', { employee: employeeId, date: today, status: 'present', check_in: new Date().toISOString() });
+      await api.post(`/hr/attendance/${id}/approve/`);
       load();
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Failed to check in.');
+      alert(err instanceof ApiError ? err.message : 'Failed to approve attendance.');
     }
   }
-  async function checkOut(record: Attendance) {
+  async function rejectAttendance(id: number) {
     try {
-      await api.patch(`/hr/attendance/${record.id}/`, { check_out: new Date().toISOString() });
+      await api.post(`/hr/attendance/${id}/reject/`);
       load();
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Failed to check out.');
-    }
-  }
-  async function markStatus(employeeId: number, status: string, existing?: Attendance) {
-    try {
-      if (existing) await api.patch(`/hr/attendance/${existing.id}/`, { status });
-      else await api.post('/hr/attendance/', { employee: employeeId, date: today, status });
-      load();
-    } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Failed to update attendance.');
+      alert(err instanceof ApiError ? err.message : 'Failed to reject attendance.');
     }
   }
 
@@ -202,9 +189,8 @@ export function HRPage() {
         })}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <GlassCard className="p-5 lg:col-span-2">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+      <GlassCard className="p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex gap-1 rounded-2xl bg-white/40 p-1">
               {(['employees', 'attendance', 'payroll', 'leave'] as const).map((tab) => (
                 <button
@@ -309,14 +295,18 @@ export function HRPage() {
 
           {activeTab === 'attendance' && (
             <div className="mt-5 overflow-x-auto">
-              <p className="mb-3 text-xs text-ink-500">{today} · check employees in/out, or mark a status directly</p>
-              <table className="w-full min-w-[640px] text-left text-sm">
+              <p className="mb-3 text-xs text-ink-500">
+                {today} · employees check themselves in/out from their own HR page — accept or decline what they submit here
+                {pendingCount > 0 && <span className="ml-2 rounded-full bg-amber-100/70 px-2 py-0.5 text-[11px] font-semibold text-amber-700">{pendingCount} pending</span>}
+              </p>
+              <table className="w-full min-w-[720px] text-left text-sm">
                 <thead>
                   <tr className="text-xs uppercase tracking-wider text-ink-400">
                     <th className="pb-3 font-semibold">Employee</th>
                     <th className="pb-3 font-semibold">Status</th>
                     <th className="pb-3 font-semibold">Check-in</th>
                     <th className="pb-3 font-semibold">Check-out</th>
+                    <th className="pb-3 font-semibold">Approval</th>
                     <th className="pb-3"></th>
                   </tr>
                 </thead>
@@ -329,25 +319,22 @@ export function HRPage() {
                         <td className="py-3">{record ? <AttendanceStatusPill status={record.status} /> : <span className="text-xs text-ink-400">Not marked</span>}</td>
                         <td className="py-3 text-ink-600">{record?.check_in ? new Date(record.check_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
                         <td className="py-3 text-ink-600">{record?.check_out ? new Date(record.check_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                        <td className="py-3">{record ? <ApprovalStatusPill status={record.approval_status} /> : <span className="text-xs text-ink-300">—</span>}</td>
                         <td className="py-3 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            {!record && (
-                              <>
-                                <GlassButton variant="glass" size="sm" onClick={() => checkIn(e.id)}><LogIn className="h-3.5 w-3.5" /> Check in</GlassButton>
-                                <button onClick={() => markStatus(e.id, 'absent')} className="rounded-full border border-white/50 bg-white/40 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50">Absent</button>
-                                <button onClick={() => markStatus(e.id, 'on_leave')} className="rounded-full border border-white/50 bg-white/40 px-3 py-1.5 text-xs font-semibold text-amber-600 hover:bg-amber-50">On leave</button>
-                              </>
-                            )}
-                            {record && record.status === 'present' && !record.check_out && (
-                              <GlassButton variant="glass" size="sm" onClick={() => checkOut(record)}><LogOut className="h-3.5 w-3.5" /> Check out</GlassButton>
-                            )}
-                            {record && record.check_out && <span className="text-xs text-ink-400">Completed · {record.hours_worked}h</span>}
-                          </div>
+                          {record?.approval_status === 'pending' && (
+                            <div className="flex justify-end gap-1.5">
+                              <button onClick={() => approveAttendance(record.id)} className="rounded-lg bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-200">Accept</button>
+                              <button onClick={() => rejectAttendance(record.id)} className="rounded-lg bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-200">Decline</button>
+                            </div>
+                          )}
+                          {record?.approval_status === 'approved' && record.check_out && (
+                            <span className="text-xs text-ink-400">Completed · {record.hours_worked}h</span>
+                          )}
                         </td>
                       </tr>
                     );
                   })}
-                  {employees.length === 0 && <tr><td colSpan={5} className="py-6 text-center text-sm text-ink-400">No employees yet.</td></tr>}
+                  {employees.length === 0 && <tr><td colSpan={6} className="py-6 text-center text-sm text-ink-400">No employees yet.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -423,61 +410,15 @@ export function HRPage() {
               </table>
             </div>
           )}
-        </GlassCard>
+      </GlassCard>
 
-        <div className="flex flex-col gap-4">
-          <GlassCard className="p-5">
-            <h3 className="font-display text-base font-bold text-ink-900">Quick Actions</h3>
-            <p className="text-xs text-ink-500">HR operations</p>
-            <div className="mt-4 space-y-2.5">
-              {[
-                { name: 'Generate payslip', desc: 'Compute salary + overtime for an employee', icon: DollarSign, onClick: () => { setActiveTab('payroll'); setShowGeneratePayslip(true); } },
-                { name: 'Add employee', desc: 'Onboard a new team member', icon: Users, onClick: () => { setActiveTab('employees'); setShowAddEmployee(true); } },
-              ].map((a) => {
-                const Icon = a.icon;
-                return (
-                  <button key={a.name} onClick={a.onClick} className="group flex w-full items-center gap-3 rounded-2xl border border-white/40 bg-white/30 p-3 text-left transition-all hover:-translate-y-0.5 hover:border-brand-300 hover:bg-white/50">
-                    <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-700 text-white shadow-glow"><Icon className="h-5 w-5" /></span>
-                    <div className="flex-1">
-                      <div className="text-sm font-semibold text-ink-900">{a.name}</div>
-                      <div className="text-xs text-ink-500">{a.desc}</div>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-ink-400 transition-transform group-hover:translate-x-1 group-hover:text-brand-600" />
-                  </button>
-                );
-              })}
-            </div>
-          </GlassCard>
-
-          <GlassCard className="p-5">
-            <h3 className="font-display text-base font-bold text-ink-900">By Position</h3>
-            <p className="text-xs text-ink-500">Headcount distribution</p>
-            <div className="mt-4 space-y-3">
-              {positionBreakdown.map((d) => (
-                <div key={d.position}>
-                  <div className="mb-1 flex items-center justify-between text-xs">
-                    <span className="font-medium text-ink-700">{d.position}</span>
-                    <span className="font-semibold text-ink-900">{d.count}</span>
-                  </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/50">
-                    <div className="h-full rounded-full bg-gradient-to-r from-brand-400 to-brand-600 transition-all duration-700" style={{ width: `${d.pct}%` }} />
-                  </div>
-                </div>
-              ))}
-              {positionBreakdown.length === 0 && <p className="text-sm text-ink-400">No employees yet.</p>}
-            </div>
-          </GlassCard>
-        </div>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <GlassCard className="p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-display text-base font-bold text-ink-900">Today's Attendance</h3>
-              <p className="text-xs text-ink-500">{today}</p>
-            </div>
+      <GlassCard className="p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-display text-base font-bold text-ink-900">Today's Attendance</h3>
+            <p className="text-xs text-ink-500">{today}</p>
           </div>
+        </div>
           <div className="mt-5 grid grid-cols-3 gap-3">
             {[
               { label: 'Present', value: presentToday, icon: CheckCircle, color: 'text-brand-600', bg: 'bg-brand-100/70' },
@@ -503,39 +444,7 @@ export function HRPage() {
               <div className="h-full rounded-full bg-gradient-to-r from-brand-400 to-brand-600" style={{ width: `${attendanceRate ?? 0}%` }} />
             </div>
           </div>
-        </GlassCard>
-
-        <GlassCard className="p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-display text-base font-bold text-ink-900">Headcount Highlights</h3>
-              <p className="text-xs text-ink-500">Illustrative example — hire/resignation tracking isn't built yet</p>
-            </div>
-            <Badge tone="neutral"><Clock className="h-3 w-3" /> Sample</Badge>
-          </div>
-          <div className="mt-5 space-y-3">
-            {[
-              { label: 'New hires', value: '—', icon: Users, tone: 'text-brand-600', bg: 'bg-brand-50/70' },
-              { label: 'Resignations', value: '—', icon: TrendingUp, tone: 'text-rose-500', bg: 'bg-rose-50/70' },
-            ].map((h) => {
-              const Icon = h.icon;
-              return (
-                <div key={h.label} className={`flex items-center gap-3 rounded-2xl ${h.bg} border border-white/40 px-4 py-3`}>
-                  <Icon className={`h-5 w-5 ${h.tone}`} />
-                  <span className="flex-1 text-sm font-medium text-ink-700">{h.label}</span>
-                  <span className={`font-display text-xl font-bold ${h.tone}`}>{h.value}</span>
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-4 rounded-2xl border border-brand-200/50 bg-brand-50/50 p-4">
-            <p className="text-xs leading-relaxed text-ink-600">
-              Employees, attendance, payroll and leave above are live from the backend. This card is a placeholder for
-              hire/resignation tracking, which isn't part of the current data model.
-            </p>
-          </div>
-        </GlassCard>
-      </div>
+      </GlassCard>
     </div>
   );
 }
@@ -749,6 +658,15 @@ function AttendanceStatusPill({ status }: { status: string }) {
   };
   const label = status === 'on_leave' ? 'On leave' : status.charAt(0).toUpperCase() + status.slice(1);
   return <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${map[status] ?? map.present}`}>{label}</span>;
+}
+
+function ApprovalStatusPill({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    approved: 'bg-brand-100/70 text-brand-700 border-brand-200/60',
+    pending: 'bg-amber-100/70 text-amber-700 border-amber-200/60',
+    rejected: 'bg-rose-100/70 text-rose-600 border-rose-200/60',
+  };
+  return <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold capitalize ${map[status] ?? map.pending}`}>{status}</span>;
 }
 
 function AttendanceBar({ pct }: { pct: number | null }) {

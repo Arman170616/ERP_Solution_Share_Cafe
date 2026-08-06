@@ -151,17 +151,24 @@ class UserViewSet(viewsets.ModelViewSet):
 
 
 class StaffListView(APIView):
-    """Minimal {id, username, role} list of active Manager/Staff accounts — deliberately
-    excludes Admin (Employee Performance and "taken by" attribution are about staff, not
-    the admin account) and doesn't expose email/phone the way UserViewSet does, so any
-    authenticated POS user can use it to populate a "taken by" picker."""
+    """Minimal {id, username, role} list of active Manager/Staff accounts who still have an
+    HR Employee profile — deliberately excludes Admin (Employee Performance and "taken by"
+    attribution are about staff, not the admin account) and doesn't expose email/phone the
+    way UserViewSet does, so any authenticated POS user can use it to populate a "taken by"
+    picker. Requiring employee_profile__isnull=False keeps this in sync with the actual HR
+    employee list: an account can be is_active=True (e.g. a Manager account with no HR
+    profile, or a leftover from before employee-delete started deactivating logins) without
+    being someone who should show up as a "taken by" option.
+    """
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        qs = User.objects.filter(is_active=True, role__in=[User.Role.MANAGER, User.Role.STAFF]).order_by(
-            "username"
-        )
+        qs = User.objects.filter(
+            is_active=True,
+            role__in=[User.Role.MANAGER, User.Role.STAFF],
+            employee_profile__isnull=False,
+        ).order_by("username")
         return Response([{"id": u.id, "username": u.username, "role": u.role} for u in qs])
 
 

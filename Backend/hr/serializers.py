@@ -49,6 +49,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
 class AttendanceSerializer(serializers.ModelSerializer):
     hours_worked = serializers.FloatField(read_only=True)
     employee_name = serializers.CharField(source="employee.user.get_full_name", read_only=True)
+    marked_by_name = serializers.CharField(source="marked_by.get_full_name", read_only=True, default=None)
+    approved_by_name = serializers.CharField(source="approved_by.get_full_name", read_only=True, default=None)
 
     class Meta:
         model = Attendance
@@ -61,7 +63,13 @@ class AttendanceSerializer(serializers.ModelSerializer):
             "check_out",
             "status",
             "hours_worked",
+            "approval_status",
+            "marked_by",
+            "marked_by_name",
+            "approved_by",
+            "approved_by_name",
         ]
+        read_only_fields = ["approval_status", "marked_by", "approved_by"]
 
 
 class ShiftSerializer(serializers.ModelSerializer):
