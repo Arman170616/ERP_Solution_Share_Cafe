@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type InputHTMLAttributes } from 'react';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { MeshBackground } from '../../components/MeshBackground';
 import { BrandMark } from '../../components/BrandMark';
 import { Badge, GlassButton, GlassCard } from '../../components/ui';
@@ -18,7 +18,7 @@ function Field({ label, ...props }: { label: string } & InputHTMLAttributes<HTML
   );
 }
 
-export function AuthPage({ onBack }: { onBack: () => void }) {
+export function AuthPage() {
   const { login, signup } = useAuth();
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
   const [mode, setMode] = useState<'login' | 'signup'>('login');
@@ -59,12 +59,6 @@ export function AuthPage({ onBack }: { onBack: () => void }) {
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
       <MeshBackground />
       <div className="relative w-full max-w-md">
-        <button
-          onClick={onBack}
-          className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-ink-600 transition-colors hover:text-ink-900"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to site
-        </button>
 
         <GlassCard variant="strong" sheen className="p-8">
           <div className="mb-6 flex items-center gap-2.5">
