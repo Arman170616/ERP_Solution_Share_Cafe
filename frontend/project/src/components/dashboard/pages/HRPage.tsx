@@ -469,7 +469,7 @@ function AddEmployeeForm({ onSaved, onCancel }: { onSaved: () => void; onCancel:
       await api.post('/hr/employees/', { user: user.id, position, hire_date: hireDate, base_salary: salary });
       onSaved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add employee.');
+      setError(err instanceof ApiError ? err.message : 'Failed to add employee.');
     } finally {
       setSaving(false);
     }

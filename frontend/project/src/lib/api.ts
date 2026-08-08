@@ -28,13 +28,30 @@ export function setOnAuthExpired(cb: () => void) {
   onAuthExpired = cb;
 }
 
+/** DRF error bodies come in two shapes: {"detail": "..."} for permission/auth errors, or
+ * {"field_name": ["message", ...], "non_field_errors": [...]} for serializer validation
+ * failures (e.g. a unique-username clash). Without this, every validation error on every
+ * form in the app just showed "Request failed (400)" with no indication of what to fix. */
+function extractErrorMessage(status: number, body: unknown): string {
+  if (body && typeof body === 'object') {
+    const obj = body as Record<string, unknown>;
+    if (typeof obj.detail === 'string') return obj.detail;
+    const parts: string[] = [];
+    for (const [field, value] of Object.entries(obj)) {
+      const messages = Array.isArray(value) ? value : [value];
+      const text = messages.map(String).join(' ');
+      parts.push(field === 'non_field_errors' ? text : `${field}: ${text}`);
+    }
+    if (parts.length) return parts.join(' · ');
+  }
+  return `Request failed (${status})`;
+}
+
 export class ApiError extends Error {
   status: number;
   body: unknown;
   constructor(status: number, body: unknown) {
-    const detail =
-      body && typeof body === 'object' && 'detail' in body ? String((body as { detail: unknown }).detail) : null;
-    super(detail || `Request failed (${status})`);
+    super(extractErrorMessage(status, body));
     this.status = status;
     this.body = body;
   }

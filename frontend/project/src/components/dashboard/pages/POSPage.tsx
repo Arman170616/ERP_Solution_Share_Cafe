@@ -274,19 +274,20 @@ export function POSPage() {
   return (
     <div className="space-y-4">
       {/* Top tabs */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-1 rounded-2xl bg-white/40 p-1">
           {(['pos', 'orders', ...(canSeePerformance ? (['performance'] as Tab[]) : [])] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
               className={[
-                'flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold capitalize transition-all',
+                'flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold capitalize transition-all sm:gap-2 sm:px-4 sm:py-2 sm:text-sm',
                 activeTab === t ? 'bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-glow' : 'text-ink-600 hover:bg-white/60',
               ].join(' ')}
             >
               {t === 'pos' ? <ShoppingCart className="h-4 w-4" /> : t === 'orders' ? <ChefHat className="h-4 w-4" /> : <TrendingUp className="h-4 w-4" />}
-              {t === 'pos' ? 'Point of Sale' : t === 'orders' ? 'Order Management' : 'Performance'}
+              <span className="sm:hidden">{t === 'pos' ? 'POS' : t === 'orders' ? 'OM' : 'Perf'}</span>
+              <span className="hidden sm:inline">{t === 'pos' ? 'Point of Sale' : t === 'orders' ? 'Order Management' : 'Performance'}</span>
               {t === 'orders' && (
                 <span className={['rounded-full px-1.5 py-0.5 text-[9px] font-bold', activeTab === 'orders' ? 'bg-white/25 text-white' : 'bg-brand-100 text-brand-700'].join(' ')}>
                   {activeOrders.filter((o) => o.status !== 'delivered').length}
@@ -296,9 +297,12 @@ export function POSPage() {
           ))}
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <Coffee className="h-5 w-5 text-amber-700" />
-          <span className="font-display text-base font-bold text-ink-900">Share Cafe</span>
-          <span className="text-xs text-ink-500">· Al Saada, Salalah, Oman</span>
+          <Coffee className="h-5 w-5 shrink-0 text-amber-700" />
+          <span className="font-display text-sm font-bold text-ink-900 sm:text-base">
+            <span className="sm:hidden">Salalah, Oman</span>
+            <span className="hidden sm:inline">Share Cafe</span>
+          </span>
+          <span className="hidden text-xs text-ink-500 sm:inline">· Al Saada, Salalah, Oman</span>
         </div>
       </div>
 

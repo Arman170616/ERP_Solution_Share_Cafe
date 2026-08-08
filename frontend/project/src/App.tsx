@@ -10,6 +10,7 @@ import { AccountingPage } from './components/dashboard/pages/AccountingPage';
 import { HRPage } from './components/dashboard/pages/HRPage';
 import { StaffHRPage } from './components/dashboard/pages/StaffHRPage';
 import { ReportsPage } from './components/dashboard/pages/ReportsPage';
+import { HelpPage } from './components/dashboard/pages/HelpPage';
 import { AuthPage } from './pages/auth/AuthPage';
 import { RequireRole } from './components/RequireRole';
 import { useAuth } from './contexts/AuthContext';
@@ -23,6 +24,7 @@ const meta: Record<NavKey, { title: string; subtitle: string }> = {
   accounting: { title: 'Accounting', subtitle: 'Revenue, expenses and financial summary' },
   hr: { title: 'HR & Payroll', subtitle: 'Employees, attendance and payroll' },
   reports: { title: 'Reports', subtitle: 'Financial and operational reports' },
+  help: { title: 'Help & Support', subtitle: 'Get in touch with the Share Cafe team' },
 };
 
 function App() {
@@ -90,6 +92,7 @@ function App() {
           <ReportsPage />
         </RequireRole>
       )}
+      {active === 'help' && <HelpPage />}
     </DashboardLayout>
   );
 }

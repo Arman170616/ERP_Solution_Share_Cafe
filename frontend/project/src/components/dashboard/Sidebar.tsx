@@ -18,7 +18,8 @@ export type NavKey =
   | 'pos'
   | 'inventory'
   | 'hr'
-  | 'reports';
+  | 'reports'
+  | 'help';
 
 type NavItem = {
   key: NavKey;
@@ -159,7 +160,15 @@ export function Sidebar({
 
           {/* Bottom */}
           <div className="mt-2 space-y-1 border-t border-white/40 pt-3">
-            <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-ink-600 transition-colors hover:bg-white/60 hover:text-ink-900">
+            <button
+              onClick={() => onNavigate('help')}
+              className={[
+                'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                active === 'help'
+                  ? 'bg-gradient-to-r from-brand-500 to-brand-700 text-white shadow-glow'
+                  : 'text-ink-600 hover:bg-white/60 hover:text-ink-900',
+              ].join(' ')}
+            >
               <LifeBuoy className="h-4.5 w-4.5" /> Help & support
             </button>
             <button
